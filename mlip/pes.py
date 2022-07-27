@@ -43,7 +43,7 @@ class PotentialNeuralNet(nn.Module):
         Parameters
         ----------
             numbers: NTA Tensor{Int} 
-              periodic number of atomsㅛㅐㅕ
+              periodic number of atoms
             positions: NTA x 3 Tensor{Double} 
               Atomic positions
             cells: NC x 3 x 3 Tensor{Double} 
