@@ -55,7 +55,7 @@ def get_nn(symbols, positions, cell, pbc, cutoff=6., device='cpu'):
     A = len(positions)
     icell = tc.linalg.pinv(cell)
     grid = tc.zeros(3).long().to(device=device)
-    grid[pbc] = ((2 * cutoff * tc.linalg.norm(icell, axis=0)).long() + 1)[pbc]
+    grid[pbc] = ((2 * cutoff * tc.linalg.norm(icell, axis=0)).to(device=device).long() + 1)[pbc]
 
     iidxs, jidxs, disps, dists, isymb, jsymb = [], [], [], [], [], []
     for n1, n2, n3 in itertools.product(range(0, grid[0] + 1),
