@@ -112,7 +112,7 @@ def get_nn(symbols, positions, cell, pbc, cutoff=6., device='cpu'):
     return tc.cat(iidxs), tc.cat(jidxs), tc.cat(isymb), tc.cat(jsymb), tc.cat(disps), tc.cat(dists)
 
 
-def get_neighbors_info(symbols, positions, cells, crystalidx, pbcs, cutoff=None):
+def get_neighbors_info(symbols, positions, cells, crystalidx, pbcs, cutoff=None, device='cpu'):
     """
     Parameters
     ----------
@@ -137,8 +137,8 @@ def get_neighbors_info(symbols, positions, cells, crystalidx, pbcs, cutoff=None)
      disp: NN Tensor{Double}
     """
 
-    cryset = tc.unique(crystalidx)
-    totalidx = tc.arange(len(symbols))
+    cryset = tc.unique(crystalidx).to(device=device)
+    totalidx = tc.arange(len(symbols)).to(device=device)
 
     iidx, jidx, isym, jsym, cidx, disp, dist = [], [], [], [], [], [], []
     for c, cidx in enumerate(cryset):
@@ -148,7 +148,7 @@ def get_neighbors_info(symbols, positions, cells, crystalidx, pbcs, cutoff=None)
         crystali = totalidx[cmask]
         pbc, cell = pbcs[c], cells[c]
         # NN, NN, NNx3, NN
-        idx, jdx, isy, jsy, dsp, dst = get_nn(symbol, position, cell, pbc)
+        idx, jdx, isy, jsy, dsp, dst = get_nn(symbol, position, cell, pbc, device=device)
         iidx.append(crystali[idx])
         # iidx.append(idx)
         isym.append(isy)
@@ -211,8 +211,8 @@ class REANN(nn.Module):
         self.nmax = nmax
         self.lmax = lmax
         # self.loop = loop
-        self.register_buffer('loop', tc.Tensor([loop]).long())
-        self.register_buffer('rcut', tc.Tensor([rcut]))
+        self.register_buffer('loop', tc.Tensor([loop]).long().to(device=device))
+        self.register_buffer('rcut', tc.Tensor([rcut]).to(device=device))
 
         assert len(species) == max(species) + 1, "Use compressed expression"
         NS = len(species)
@@ -269,10 +269,11 @@ class REANN(nn.Module):
         NTAx NO Tensor{Double}
             density ρ
         """
+        device = self.device
 
         # Number of crystals, Number of total atoms
         iidx, jidx, isym, jsym, disp, dist = \
-            get_neighbors_info(symbols, positions, cells, crystalidx, pbcs)
+            get_neighbors_info(symbols, positions, cells, crystalidx, pbcs, device=device)
 
         NTA = len(positions)
         dtype, device = positions.dtype, positions.device
