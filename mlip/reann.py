@@ -244,7 +244,7 @@ class REANN(nn.Module):
 
         moduledict = nn.ModuleDict().to(device=device)
         for spe in species:
-            moduledict[str(spe)] = nn.Sequential(*layers).double()
+            moduledict[str(spe)] = copy.deepcopy(nn.Sequential(*layers).double())
 
         gjkwargs = dict(species=species, nmax=nmax)
         gj = Gj(moduledict, **gjkwargs)
