@@ -235,9 +235,9 @@ class REANN(nn.Module):
 
         layers = (
                  nn.Linear(NO, int(1.2 * NO)),
-                 nn.SiLU(),
+                 nn.Softplus(),
                  nn.Linear(int(1.2 * NO), int(1.2 * nmax)),
-                 nn.SiLU(),
+                 nn.Softplus(),
                  nn.Linear(int(1.2 * nmax), nmax)
                  )
 
