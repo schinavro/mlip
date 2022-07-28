@@ -13,7 +13,7 @@ def gen_module(species=None, nmax=2, lmax=10, loop=2, device='cpu'):
     for spe in species:
         moduledict[str(spe)] = nn.Sequential(
             nn.Linear(desc.NO, int(desc.NO*1.3)),
-            nn.SiLU(),
+            nn.Softplus(),
             nn.Linear(int(desc.NO*1.3), 1)
         )
     moduledict = moduledict.double().to(device=device)
