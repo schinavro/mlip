@@ -1,4 +1,5 @@
 import time
+import copy
 import itertools
 import torch as tc
 from torch import nn
@@ -246,7 +247,8 @@ class REANN(nn.Module):
             moduledict[str(spe)] = nn.Sequential(*layers).double()
 
         gjkwargs = dict(species=species, nmax=nmax)
-        a = [Gj(moduledict, **gjkwargs) for j in range(loop)]
+        gj = Gj(moduledict, **gjkwargs)
+        a = [copy.deepcopy(gj) for j in range(loop)]
         self.gj = nn.ModuleList(a).to(device=device)
 
     def forward(self, symbols, positions, cells, crystalidx, pbcs):
