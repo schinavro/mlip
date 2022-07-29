@@ -223,7 +223,8 @@ class REANN(nn.Module):
 
         self.register_buffer('NS', tc.Tensor([NS]).long().to(device=device))
         self.register_buffer('NO', tc.Tensor([NO]).long().to(device=device))
-        self.register_buffer('Oidx', tc.Tensor(Oidx).long().to(device=device))
+        # self.register_buffer('Oidx', tc.Tensor(Oidx).long().to(device=device))
+        self.Oidx = Oidx
 
         self.α = Parameter(-(tc.rand(NS, nmax, device=device) + 0.2))
         self.rs = Parameter(tc.rand(NS, nmax, device=device))
@@ -231,7 +232,7 @@ class REANN(nn.Module):
         self.species_params = Parameter(tc.rand(NS, nmax).to(device=device))
         # Loop x NO x nmax x NO
         self.orbital_params = Parameter(tc.rand(nmax, NO)[None, None].repeat(
-                                  loop, lmax, 1, 1).to(device=device))
+                                  loop + 1, lmax, 1, 1).to(device=device))
 
         layers = (
                  nn.Linear(NO, int(1.2 * NO)),
