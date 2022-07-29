@@ -209,9 +209,12 @@ class REANN(nn.Module):
 
         self.device = device
         self.species = species
-        self.register_buffer('nmax', tc.Tensor([nmax]).long().to(device=device))
-        self.register_buffer('lmax', tc.Tensor([lmax]).long().to(device=device))
-        self.register_buffer('loop', tc.Tensor([loop]).long().to(device=device))
+        self.nmax = nmax
+        self.lmax = lmax
+        self.loop = loop
+        # self.register_buffer('nmax', tc.Tensor([nmax]).long().to(device=device))
+        # self.register_buffer('lmax', tc.Tensor([lmax]).long().to(device=device))
+        # self.register_buffer('loop', tc.Tensor([loop]).long().to(device=device))
         self.register_buffer('rcut', tc.Tensor([rcut]).to(device=device))
 
         assert len(species) == max(species) + 1, "Use compressed expression"
@@ -221,8 +224,10 @@ class REANN(nn.Module):
         for i in range(lmax):
             Oidx.extend([i] * (2*i + 1))
 
-        self.register_buffer('NS', tc.Tensor([NS]).long().to(device=device))
-        self.register_buffer('NO', tc.Tensor([NO]).long().to(device=device))
+        self.NS = NS
+        self.NO = NO
+        # self.register_buffer('NS', tc.Tensor([NS]).long().to(device=device))
+        # self.register_buffer('NO', tc.Tensor([NO]).long().to(device=device))
         # self.register_buffer('Oidx', tc.Tensor(Oidx).long().to(device=device))
         self.Oidx = Oidx
 
@@ -235,11 +240,12 @@ class REANN(nn.Module):
                                   loop + 1, lmax, 1, 1).to(device=device))
 
         layers = (
-                 nn.Linear(NO, int(1.2 * NO)),
-                 nn.Softplus(),
-                 nn.Linear(int(1.2 * NO), int(1.2 * nmax)),
-                 nn.Softplus(),
-                 nn.Linear(int(1.2 * nmax), nmax)
+                  nn.Linear(NO, nmax),
+#                  nn.Linear(NO, int(1.2 * NO)),
+#                 nn.Softplus(),
+#                 nn.Linear(int(1.2 * NO), int(1.2 * nmax)),
+#                  nn.Softplus(),
+#                 nn.Linear(int(1.2 * nmax), nmax)
                  )
 
         moduledict = nn.ModuleDict().to(device=device)
@@ -300,11 +306,11 @@ class REANN(nn.Module):
         params = (device, dtype, NTA, NO, nmax)
         # NTA x O
         ρ = self.get_density(Wln, Csn, Fxyz, iidx, jidx, *params)
-        for i in range(1, self.loop + 1):
+        for i in range(self.loop):
             # NTAxO -> NTAxnmax
-            Csn = Csn + self.gj[i-1](ρ, symbols)
+            Csn = Csn + self.gj[i](ρ, symbols)
             # Loop x lmax x nmax x O -> O x nmax x O
-            Wln = self.orbital_params[i, Oidx]
+            Wln = self.orbital_params[i+1, Oidx]
             # NTA x O
             ρ = self.get_density(Wln, Csn, Fxyz, iidx, jidx, *params)
         return ρ
