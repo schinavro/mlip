@@ -209,9 +209,8 @@ class REANN(nn.Module):
 
         self.device = device
         self.species = species
-        self.nmax = nmax
-        self.lmax = lmax
-        # self.loop = loop
+        self.register_buffer('nmax', tc.Tensor([nmax]).long().to(device=device))
+        self.register_buffer('lmax', tc.Tensor([lmax]).long().to(device=device))
         self.register_buffer('loop', tc.Tensor([loop]).long().to(device=device))
         self.register_buffer('rcut', tc.Tensor([rcut]).to(device=device))
 
@@ -222,9 +221,9 @@ class REANN(nn.Module):
         for i in range(lmax):
             Oidx.extend([i] * (2*i + 1))
 
-        self.NS = NS
-        self.NO = NO
-        self.Oidx = Oidx
+        self.register_buffer('NS', tc.Tensor([NS]).long().to(device=device))
+        self.register_buffer('NO', tc.Tensor([NO]).long().to(device=device))
+        self.register_buffer('Oidx', tc.Tensor(Oidx).long().to(device=device))
 
         self.α = Parameter(-(tc.rand(NS, nmax, device=device) + 0.2))
         self.rs = Parameter(tc.rand(NS, nmax, device=device))
@@ -300,7 +299,7 @@ class REANN(nn.Module):
         params = (device, dtype, NTA, NO, nmax)
         # NTA x O
         ρ = self.get_density(Wln, Csn, Fxyz, iidx, jidx, *params)
-        for i in range(1, self.loop):
+        for i in range(1, self.loop + 1):
             # NTAxO -> NTAxnmax
             Csn = Csn + self.gj[i-1](ρ, symbols)
             # Loop x lmax x nmax x O -> O x nmax x O
