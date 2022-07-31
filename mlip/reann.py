@@ -204,6 +204,7 @@ class REANN(nn.Module):
 
     """
     def __init__(self, species=None, rcut=6., lmax=2, nmax=2, loop=1, device='cpu',
+		 modulelist=None,
                  **kwargs):
         super(REANN, self).__init__()
 
@@ -239,23 +240,7 @@ class REANN(nn.Module):
         self.orbital_params = Parameter(tc.rand(nmax, NO)[None, None].repeat(
                                   loop + 1, lmax, 1, 1).to(device=device))
 
-        layers = (
-                  nn.Linear(NO, nmax),
-#                  nn.Linear(NO, int(1.2 * NO)),
-#                 nn.Softplus(),
-#                 nn.Linear(int(1.2 * NO), int(1.2 * nmax)),
-#                  nn.Softplus(),
-#                 nn.Linear(int(1.2 * nmax), nmax)
-                 )
-
-        moduledict = nn.ModuleDict().to(device=device)
-        for spe in species:
-            moduledict[str(spe)] = copy.deepcopy(nn.Sequential(*layers).double())
-
-        gjkwargs = dict(species=species, nmax=nmax)
-        gj = Gj(moduledict, **gjkwargs)
-        a = [copy.deepcopy(gj) for j in range(loop)]
-        self.gj = nn.ModuleList(a).to(device=device)
+        self.gj = modulelist
 
     def forward(self, symbols, positions, cells, crystalidx, pbcs):
         """
