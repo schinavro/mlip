@@ -240,7 +240,25 @@ class REANN(nn.Module):
         self.orbital_params = Parameter(tc.rand(nmax, NO)[None, None].repeat(
                                   loop + 1, lmax, 1, 1).to(device=device))
 
-        self.gj = modulelist
+        if modulelist is None:
+            gj = self.init_modulelist()
+        else:
+            gj = modulelist
+        self.gj = gj
+
+    def init_modulelist(self):
+        modulelist = nn.ModuleList()
+        for j in range(self.loop):
+            descdict = nn.ModuleDict()
+            for spe in self.species:
+                descdict[str(spe)] = nn.Sequential(
+                        nn.Linear(self.NO, 128),
+                         nn.LeakyReLU(),
+                        nn.Linear(128, self.nmax)
+                )
+            modulelist.append(descdict)
+        
+        return modulelist
 
     def forward(self, symbols, positions, cells, crystalidx, pbcs):
         """
