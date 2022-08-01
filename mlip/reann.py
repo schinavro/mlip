@@ -374,10 +374,11 @@ class REANN(nn.Module):
         """
         NN, dtype, device = len(disp), disp.dtype, disp.device
 
-        angular = tc.ones(NN, NO, dtype=dtype, device=device)
+        angular = []
+        angular.append(tc.ones(NN, 1, dtype=dtype, device=device).requires_grad_(True))
         if lmax > 1:
-            # NNx1 * NNx3 -> NNx3
-            angular[:, 1:4] = disp
+            # NNx3
+            angular.append(disp)
         if lmax > 2:
             pass
             """
@@ -387,7 +388,8 @@ class REANN(nn.Module):
                     for pqr in mulinomial(m):
                         p, q, r = pqr
             """
-        return angular
+        # NNx1 + NNx3 ... -> NNxNO
+        return tc.cat(angular, axis=1)
 
     def get_density(self, Wln, Csn, Fxyz, iidx, jidx, device, dtype, NTA, NO, nmax):
         """
@@ -407,9 +409,9 @@ class REANN(nn.Module):
         # NNx1xnmax x NNxNOxnmax -> NNxNOxnmax
         cjFxyz = cj[:, None] * Fxyz
 
-        # NN x NO x nmax -> NA x NO x nmax
+        # NN x NO x nmax -> NTA x NO x nmax
         bnl = tc.zeros((NTA, NO, nmax), device=device, dtype=dtype).index_add(
                                                 0, iidx, cjFxyz)
 
-        # NOx(nmax)xNO * NAxNOx(nmax)x1, -> NA x NO x nmax x NO -> NAxOxO -> NAxO
-        return tc.sum(tc.sum(Wln * bnl[..., None], axis=2) ** 2, axis=1)
+        # NTAxNOx(nmax)x1 x 1xNOx(nmax)xNO -> NTA x NO x nmax x NO -> NTAxOxO -> NTAxO
+        return tc.sum(tc.sum(bnl[..., None] * Wln[None], axis=2) ** 2, axis=1)
