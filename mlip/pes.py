@@ -38,12 +38,12 @@ class PotentialNeuralNet(nn.Module):
         self.moduledict = moduledict
         self.species = species       
         
-    def forward(self, symbols, positions, cells, crystalidx, pbcs, cutoff=6.) -> tuple:
+    def forward(self, symbols, positions, cells, pbcs, energyidx, crystalidx, cutoff=6.) -> tuple:
         """ 
     
         Parameters
         ----------
-            numbers: NTA Tensor{Int} 
+            symbols: NTA Tensor{Int} 
               periodic number of atoms
             positions: NTA x 3 Tensor{Double} 
               Atomic positions
@@ -64,31 +64,27 @@ class PotentialNeuralNet(nn.Module):
         """
         # Descriptor calculation
         # NTA x 3 -> NTA x D
-        desc = self.desc(symbols, positions, cells, crystalidx, pbcs)
+        desc = self.desc(symbols, positions, cells, pbcs, energyidx, crystalidx)
         
         positionsidx = tc.arange(len(positions))
-        energies, new_positionsidx = [], []
+        new_energies, new_positionsidx = [], []
         for spe in self.species:
             # NTA -> NAS
             smask = spe == symbols        
             # NAS x NO -> NAS
-            energies.append(self.moduledict[str(spe)](desc[smask]))
-
+            new_energies.append(self.moduledict[str(spe)](desc[smask]))
             new_positionsidx.append(positionsidx[smask])
             
-        energies = tc.cat(energies)
         new_positionsidx = tc.cat(new_positionsidx)
         _, srtidx = tc.sort(new_positionsidx)
-        energies = energies[srtidx]
+        energies = tc.cat(new_energies)[srtidx]
         
-
-        energy, forces = [], []
-        new_crystidx = tc.unique_consecutive(crystalidx)
-        for i, cry in enumerate(new_crystidx):
+        energy = []
+        for cry in energyidx:
             cmask = cry == crystalidx
             V = tc.sum(energies[cmask])
-            
             energy.append(V[None])            
+
         energy = tc.cat(energy)
         forces = grad(tc.sum(energy), positions, create_graph=True, allow_unused=True)[0]
         

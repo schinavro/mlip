@@ -113,7 +113,7 @@ def get_nn(symbols, positions, cell, pbc, cutoff=6., device='cpu'):
     return tc.cat(iidxs), tc.cat(jidxs), tc.cat(isymb), tc.cat(jsymb), tc.cat(disps), tc.cat(dists)
 
 
-def get_neighbors_info(symbols, positions, cells, crystalidx, pbcs, cutoff=None, device='cpu'):
+def get_neighbors_info(symbols, positions, cells, pbcs, energyidx, crystalidx, cutoff=None, device='cpu'):
     """
     Parameters
     ----------
@@ -138,11 +138,11 @@ def get_neighbors_info(symbols, positions, cells, crystalidx, pbcs, cutoff=None,
      disp: NN Tensor{Double}
     """
 
-    cryset = tc.unique(crystalidx).to(device=device)
+    # cryset = tc.unique(crystalidx).to(device=device)
     totalidx = tc.arange(len(symbols)).to(device=device)
 
     iidx, jidx, isym, jsym, cidx, disp, dist = [], [], [], [], [], [], []
-    for c, cidx in enumerate(cryset):
+    for c, cidx in enumerate(energyidx):
         cmask = crystalidx == cidx
         position = positions[cmask]
         symbol = symbols[cmask]
@@ -260,7 +260,7 @@ class REANN(nn.Module):
         
         return modulelist
 
-    def forward(self, symbols, positions, cells, crystalidx, pbcs):
+    def forward(self, symbols, positions, cells, pbcs, energyidx, crystalidx):
         """
         Parameters
         ----------
@@ -284,7 +284,7 @@ class REANN(nn.Module):
 
         # Number of crystals, Number of total atoms
         iidx, jidx, isym, jsym, disp, dist = \
-            get_neighbors_info(symbols, positions, cells, crystalidx, pbcs, device=device)
+            get_neighbors_info(symbols, positions, cells, pbcs, energyidx, crystalidx, device=device)
 
         NTA = len(positions)
         dtype, device = positions.dtype, positions.device
