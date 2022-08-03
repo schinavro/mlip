@@ -102,6 +102,9 @@ def get_nn(symbols, positions, cell, pbc, cutoff=6., device='cpu'):
         disps.append(disp1[mask1])
         dists.append(dist1[mask1])
 
+        if n1 == 0 and n2 == 0 and n3 == 0:
+            continue
+
         # Symmetric side appending
         iidxs.append(iidx2)
         jidxs.append(jidx2)
@@ -149,7 +152,7 @@ def get_neighbors_info(symbols, positions, cells, pbcs, energyidx, crystalidx, c
         crystali = totalidx[cmask]
         pbc, cell = pbcs[c], cells[c]
         # NN, NN, NNx3, NN
-        idx, jdx, isy, jsy, dsp, dst = get_nn(symbol, position, cell, pbc, device=device)
+        idx, jdx, isy, jsy, dsp, dst = get_nn(symbol, position, cell, pbc, cutoff=cutoff, device=device)
         iidx.append(crystali[idx])
         # iidx.append(idx)
         isym.append(isy)
@@ -232,7 +235,7 @@ class REANN(nn.Module):
         # self.register_buffer('Oidx', tc.Tensor(Oidx).long().to(device=device))
         self.Oidx = Oidx
 
-        self.α = Parameter(-(tc.rand(NS, nmax, device=device) + 0.2))
+        self.α = Parameter(-(tc.rand(NS, nmax, device=device)) - tc.log(self.rcut))
         self.rs = Parameter(tc.rand(NS, nmax, device=device))
         # NS x nmax
         self.species_params = Parameter(tc.rand(NS, nmax).to(device=device))
@@ -284,7 +287,7 @@ class REANN(nn.Module):
 
         # Number of crystals, Number of total atoms
         iidx, jidx, isym, jsym, disp, dist = \
-            get_neighbors_info(symbols, positions, cells, pbcs, energyidx, crystalidx, device=device)
+            get_neighbors_info(symbols, positions, cells, pbcs, energyidx, crystalidx, cutoff=self.rcut, device=device)
 
         NTA = len(positions)
         dtype, device = positions.dtype, positions.device
