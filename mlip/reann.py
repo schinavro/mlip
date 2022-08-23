@@ -102,6 +102,9 @@ def get_nn(symbols, positions, cell, pbc, cutoff=6., device='cpu'):
         disps.append(disp1[mask1])
         dists.append(dist1[mask1])
 
+        if n1 == 0 and n2 == 0 and n3 == 0:
+            continue
+
         # Symmetric side appending
         iidxs.append(iidx2)
         jidxs.append(jidx2)
@@ -113,7 +116,7 @@ def get_nn(symbols, positions, cell, pbc, cutoff=6., device='cpu'):
     return tc.cat(iidxs), tc.cat(jidxs), tc.cat(isymb), tc.cat(jsymb), tc.cat(disps), tc.cat(dists)
 
 
-def get_neighbors_info(symbols, positions, cells, crystalidx, pbcs, cutoff=None, device='cpu'):
+def get_neighbors_info(symbols, positions, cells, pbcs, energyidx, crystalidx, cutoff=None, device='cpu'):
     """
     Parameters
     ----------
@@ -138,18 +141,18 @@ def get_neighbors_info(symbols, positions, cells, crystalidx, pbcs, cutoff=None,
      disp: NN Tensor{Double}
     """
 
-    cryset = tc.unique(crystalidx).to(device=device)
+    # cryset = tc.unique(crystalidx).to(device=device)
     totalidx = tc.arange(len(symbols)).to(device=device)
 
     iidx, jidx, isym, jsym, cidx, disp, dist = [], [], [], [], [], [], []
-    for c, cidx in enumerate(cryset):
+    for c, cidx in enumerate(energyidx):
         cmask = crystalidx == cidx
         position = positions[cmask]
         symbol = symbols[cmask]
         crystali = totalidx[cmask]
         pbc, cell = pbcs[c], cells[c]
         # NN, NN, NNx3, NN
-        idx, jdx, isy, jsy, dsp, dst = get_nn(symbol, position, cell, pbc, device=device)
+        idx, jdx, isy, jsy, dsp, dst = get_nn(symbol, position, cell, pbc, cutoff=cutoff, device=device)
         iidx.append(crystali[idx])
         # iidx.append(idx)
         isym.append(isy)
@@ -210,12 +213,12 @@ class REANN(nn.Module):
 
         self.device = device
         self.species = species
-        self.nmax = nmax
-        self.lmax = lmax
-        self.loop = loop
-        # self.register_buffer('nmax', tc.Tensor([nmax]).long().to(device=device))
-        # self.register_buffer('lmax', tc.Tensor([lmax]).long().to(device=device))
-        # self.register_buffer('loop', tc.Tensor([loop]).long().to(device=device))
+        #self.nmax = nmax
+        #self.lmax = lmax
+        #self.loop = loop
+        self.register_buffer('nmax', tc.Tensor([nmax]).long().to(device=device))
+        self.register_buffer('lmax', tc.Tensor([lmax]).long().to(device=device))
+        self.register_buffer('loop', tc.Tensor([loop]).long().to(device=device))
         self.register_buffer('rcut', tc.Tensor([rcut]).to(device=device))
 
         assert len(species) == max(species) + 1, "Use compressed expression"
@@ -225,14 +228,14 @@ class REANN(nn.Module):
         for i in range(lmax):
             Oidx.extend([i] * (2*i + 1))
 
-        self.NS = NS
-        self.NO = NO
-        # self.register_buffer('NS', tc.Tensor([NS]).long().to(device=device))
-        # self.register_buffer('NO', tc.Tensor([NO]).long().to(device=device))
+        # self.NS = NS
+        # self.NO = NO
+        self.register_buffer('NS', tc.Tensor([NS]).long().to(device=device))
+        self.register_buffer('NO', tc.Tensor([NO]).long().to(device=device))
         # self.register_buffer('Oidx', tc.Tensor(Oidx).long().to(device=device))
         self.Oidx = Oidx
 
-        self.α = Parameter(-(tc.rand(NS, nmax, device=device) + 0.2))
+        self.α = Parameter(-(tc.rand(NS, nmax, device=device)) - tc.log(self.rcut))
         self.rs = Parameter(tc.rand(NS, nmax, device=device))
         # NS x nmax
         self.species_params = Parameter(tc.rand(NS, nmax).to(device=device))
@@ -240,9 +243,27 @@ class REANN(nn.Module):
         self.orbital_params = Parameter(tc.rand(nmax, NO)[None, None].repeat(
                                   loop + 1, lmax, 1, 1).to(device=device))
 
-        self.gj = modulelist
+        if modulelist is None:
+            gj = self.init_modulelist()
+        else:
+            gj = modulelist
+        self.gj = gj
 
-    def forward(self, symbols, positions, cells, crystalidx, pbcs):
+    def init_modulelist(self):
+        modulelist = nn.ModuleList()
+        for j in range(self.loop):
+            descdict = nn.ModuleDict()
+            for spe in self.species:
+                descdict[str(spe)] = nn.Sequential(
+                        nn.Linear(self.NO, 128),
+                         nn.LeakyReLU(),
+                        nn.Linear(128, self.nmax)
+                )
+            modulelist.append(descdict)
+        
+        return modulelist
+
+    def forward(self, symbols, positions, cells, pbcs, energyidx, crystalidx):
         """
         Parameters
         ----------
@@ -266,7 +287,7 @@ class REANN(nn.Module):
 
         # Number of crystals, Number of total atoms
         iidx, jidx, isym, jsym, disp, dist = \
-            get_neighbors_info(symbols, positions, cells, crystalidx, pbcs, device=device)
+            get_neighbors_info(symbols, positions, cells, pbcs, energyidx, crystalidx, cutoff=self.rcut, device=device)
 
         NTA = len(positions)
         dtype, device = positions.dtype, positions.device
@@ -356,10 +377,11 @@ class REANN(nn.Module):
         """
         NN, dtype, device = len(disp), disp.dtype, disp.device
 
-        angular = tc.ones(NN, NO, dtype=dtype, device=device)
+        angular = []
+        angular.append(tc.ones(NN, 1, dtype=dtype, device=device).requires_grad_(True))
         if lmax > 1:
-            # NNx1 * NNx3 -> NNx3
-            angular[:, 1:4] = disp
+            # NNx3
+            angular.append(disp)
         if lmax > 2:
             pass
             """
@@ -369,7 +391,8 @@ class REANN(nn.Module):
                     for pqr in mulinomial(m):
                         p, q, r = pqr
             """
-        return angular
+        # NNx1 + NNx3 ... -> NNxNO
+        return tc.cat(angular, axis=1)
 
     def get_density(self, Wln, Csn, Fxyz, iidx, jidx, device, dtype, NTA, NO, nmax):
         """
@@ -389,9 +412,9 @@ class REANN(nn.Module):
         # NNx1xnmax x NNxNOxnmax -> NNxNOxnmax
         cjFxyz = cj[:, None] * Fxyz
 
-        # NN x NO x nmax -> NA x NO x nmax
+        # NN x NO x nmax -> NTA x NO x nmax
         bnl = tc.zeros((NTA, NO, nmax), device=device, dtype=dtype).index_add(
                                                 0, iidx, cjFxyz)
 
-        # NOx(nmax)xNO * NAxNOx(nmax)x1, -> NA x NO x nmax x NO -> NAxOxO -> NAxO
-        return tc.sum(tc.sum(Wln * bnl[..., None], axis=2) ** 2, axis=1)
+        # NTAxNOx(nmax)x1 x 1xNOx(nmax)xNO -> NTA x NO x nmax x NO -> NTAxOxO -> NTAxO
+        return tc.sum(tc.sum(bnl[..., None] * Wln[None], axis=2) ** 2, axis=1)
